@@ -1,14 +1,15 @@
 package com.freddieptf.lazyprefcompiler;
 
+import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
+import com.squareup.javapoet.TypeVariableName;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
 
 
 /**
@@ -124,6 +125,27 @@ public class PrefMethods {
         return builder.build();
     }
 
+    public static MethodSpec getObject(String methodName, String pref_key, TypeElement converter, String returnType, String objectType) {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
+                .addModifiers(Modifier.PUBLIC)
+                .returns(TypeVariableName.get(objectType))
+                .addStatement("$L converter = new $L()", converter, converter)
+                .addStatement("return converter.getVal($L)", genPrefsGet(returnType, pref_key));
+        return builder.build();
+    }
+
+    public static MethodSpec saveObject(String methodName, String pref_key, TypeElement converter, TypeElement returnType, String objectType) {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
+                .returns(void.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get(objectType), "val").build())
+                .addModifiers(Modifier.PUBLIC)
+                .addStatement("$L converter = new $L()", converter, converter)
+                .addStatement("$T supportedType = converter.toSupportedType($N)", returnType.asType(), "val")
+                .addStatement(genEditorPut(returnType.asType().toString()), pref_key, "supportedType")
+                .addStatement("editor.apply()");
+        return builder.build();
+    }
+
     public static MethodSpec contains(){
         MethodSpec.Builder builder = MethodSpec.methodBuilder("contains")
                 .addModifiers(Modifier.PUBLIC)
@@ -133,5 +155,35 @@ public class PrefMethods {
         return builder.build();
     }
 
+    private static String genEditorPut(String type) {
+        if (type.equals(String.class.getCanonicalName())) {
+            return "editor.putString($S, $N)";
+        } else if (type.equals(int.class.getCanonicalName())) {
+            return "editor.putInt($S, $N)";
+        } else if (type.equals(float.class.getCanonicalName())) {
+            return "editor.putFloat($S, $N)";
+        } else if (type.equals(boolean.class.getCanonicalName())) {
+            return "editor.putBoolean($S, $N)";
+        } else if (type.equals(long.class.getCanonicalName()) || type.equals(Long.class.getCanonicalName())) {
+            return "editor.putLong($S, $N)";
+        } else {
+            return "";
+        }
+    }
+
+    private static CodeBlock genPrefsGet(String type, String key) {
+        if (type.equals(String.class.getCanonicalName())) {
+            return CodeBlock.of("prefs.getString($S, $S)", key, "");
+        } else if (type.equals(int.class.getCanonicalName()) || type.equals(Integer.class.getCanonicalName())) {
+            return CodeBlock.of("prefs.getInt($S, $L)", key, -1);
+        } else if (type.equals(float.class.getCanonicalName()) || type.equals(Float.class.getCanonicalName())) {
+            return CodeBlock.of("prefs.getFloat($S, $L", key, -1);
+        } else if (type.equals(boolean.class.getCanonicalName()) || type.equals(Boolean.class.getCanonicalName())) {
+            return CodeBlock.of("prefs.getBoolean($S, $L)", key, false);
+        } else if (type.equals(long.class.getCanonicalName()) || type.equals(Long.class.getCanonicalName())) {
+            return CodeBlock.of("prefs.getLong($S, $L)", key, -1);
+        }
+        return null;
+    }
 
 }

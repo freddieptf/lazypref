@@ -1,14 +1,12 @@
 package com.freddieptf.lazyprefcompiler;
 
-import com.freddieptf.lazyprefannotations.GetPref;
 import com.freddieptf.lazyprefannotations.LazyPref;
-import com.freddieptf.lazyprefannotations.SavePref;
+import com.freddieptf.lazyprefannotations.Pref;
+import com.freddieptf.lazyprefannotations.TypeConverter;
 import com.google.auto.service.AutoService;
 import com.squareup.javapoet.ParameterizedTypeName;
 
 import java.io.IOException;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -25,11 +23,8 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Parameterizable;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.TypeParameterElement;
-import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -45,6 +40,11 @@ public class LazyPrefProcessor extends AbstractProcessor {
     private Elements elementUtils;
     private Types typeUtils;
     private Filer filer;
+
+    private static String getClassName(TypeElement type, String packageName) {
+        int packageLen = packageName.length() + 1;
+        return type.getQualifiedName().toString().substring(packageLen).replace('.', '$');
+    }
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnvironment) {
@@ -72,44 +72,21 @@ public class LazyPrefProcessor extends AbstractProcessor {
             lazyBabyMap.put(className, builder);
             // sanity check needed? idk..
             for(Element childElement : ((TypeElement)element).getEnclosedElements()){
-                if(childElement.getKind() == ElementKind.METHOD){
+                if (childElement.getKind() == ElementKind.FIELD) {
                     List annotations = elementUtils.getAllAnnotationMirrors(childElement);
                     if(annotations.size() <= 0){
-                        writeWarning(childElement, "methods with no annotations were found. Did you forget something?");
+                        writeWarning(childElement, "Some fields with no annotations were found. Did you forget to annotate them?");
                     } else if (annotations.size() > 1) {
-                        writeError(childElement, "can't have more than one annotation on a method");
+                        writeError(childElement, "You can't have more than one annotation on a field");
                         return true;
                     }
                 }
             }
         }
 
-        for(Element element : roundEnvironment.getElementsAnnotatedWith(GetPref.class)){
-            if(element.getKind() != ElementKind.METHOD){
-                writeError(element, "Only methods can be annotated with @%s", GetPref.class.getSimpleName());
-                return true;
-            }
-            TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
-            if(enclosingElement.getKind() != ElementKind.INTERFACE){
-                writeError(element, "Annotated methods can only be within an interface");
-                return true;
-            }
-            String pkgName = getPackageName(enclosingElement);
-            String className = getClassName(enclosingElement, pkgName) + LazyBaby.LAZY_SUFFIX;
-            LazyBaby.Builder lazyBabyBuilder = lazyBabyMap.get(className);
-
-            if(lazyBabyBuilder == null) lazyBabyBuilder = new LazyBaby.Builder(pkgName, className).buildClass();
-
-            ExecutableElement executableElement = (ExecutableElement) element;
-            GetPref annotation = element.getAnnotation(GetPref.class);
-            lazyBabyBuilder = getGetterTypes(executableElement, lazyBabyBuilder, annotation);
-            lazyBabyMap.put(className, lazyBabyBuilder);
-        }
-
-
-        for(Element element : roundEnvironment.getElementsAnnotatedWith(SavePref.class)){
-            if(element.getKind() != ElementKind.METHOD){
-                writeError(element, "Only methods can be annotated with @%s", SavePref.class.getSimpleName());
+        for (Element element : roundEnvironment.getElementsAnnotatedWith(Pref.class)) {
+            if (element.getKind() != ElementKind.FIELD) {
+                writeError(element, "Only variables/fields can be annotated with @%s! Found a %s", Pref.class.getSimpleName(), element.getKind());
                 return true;
             }
             TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
@@ -122,15 +99,13 @@ public class LazyPrefProcessor extends AbstractProcessor {
             LazyBaby.Builder lazyBabyBuilder = lazyBabyMap.get(className);
 
             if(lazyBabyBuilder == null) lazyBabyBuilder = new LazyBaby.Builder(pkgName, className).buildClass();
-
-            ExecutableElement executableElement = (ExecutableElement) element;
-            if(executableElement.getParameters().isEmpty()){
-                writeError(element, "You must provide the argument to be saved in %s method!",  element.getSimpleName());
+            Pref annotation = element.getAnnotation(Pref.class);
+            lazyBabyBuilder = generateRequiredPrefMethods(element, lazyBabyBuilder, annotation);
+            if (lazyBabyBuilder != null) lazyBabyMap.put(className, lazyBabyBuilder);
+            else {
+                writeError(element, "Code generation failed.");
                 return true;
             }
-            SavePref annotation = element.getAnnotation(SavePref.class);
-            lazyBabyBuilder = getSetterTypes(executableElement, lazyBabyBuilder, annotation);
-            lazyBabyMap.put(className, lazyBabyBuilder);
         }
 
         for(LazyBaby.Builder lazyBabyBuilder : lazyBabyMap.values()) {
@@ -148,8 +123,8 @@ public class LazyPrefProcessor extends AbstractProcessor {
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         return new HashSet<String>(){{
-            add(GetPref.class.getCanonicalName());
-            add(SavePref.class.getCanonicalName());
+            add(Pref.class.getCanonicalName());
+            add(LazyPref.class.getCanonicalName());
         }};
     }
 
@@ -172,66 +147,79 @@ public class LazyPrefProcessor extends AbstractProcessor {
                 e);
     }
 
-    private static String getClassName(TypeElement type, String packageName) {
-        int packageLen = packageName.length() + 1;
-        return type.getQualifiedName().toString().substring(packageLen).replace('.', '$');
-    }
-
     private String getPackageName(TypeElement type) {
         return elementUtils.getPackageOf(type).getQualifiedName().toString();
     }
 
-    private LazyBaby.Builder getGetterTypes(ExecutableElement element, LazyBaby.Builder builder, GetPref annotation){
-        String type = element.getReturnType().toString();
-        if(type.equals(int.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.getInt(element.getSimpleName().toString(), annotation.name()));
-        } else if(type.equals(String.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.getString(element.getSimpleName().toString(), annotation.name()));
-        } else if(type.equals(long.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.getLong(element.getSimpleName().toString(), annotation.name()));
-        } else if(type.equals(boolean.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.getBoolean(element.getSimpleName().toString(), annotation.name()));
-        } else if(type.equals(float.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.getFloat(element.getSimpleName().toString(), annotation.name()));
-        } else if(type.contains(Set.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.getStringSet(element.getSimpleName().toString(), annotation.name()));
-        }
-        return builder;
-    }
+    private LazyBaby.Builder generateRequiredPrefMethods(Element element, LazyBaby.Builder builder, Pref annotation) {
+        String type = element.asType().toString();
+        String varName = element.getSimpleName().toString();
+        String capVarName = varName.substring(0, 1).toUpperCase() + varName.substring(1);
+        String prefKey = annotation.key().isEmpty() ? varName : annotation.key();
 
-    private LazyBaby.Builder getSetterTypes(ExecutableElement element, LazyBaby.Builder builder, SavePref annotation){
-        VariableElement variableElement = element.getParameters().get(0);
-        String type = variableElement.asType().toString();
-        System.out.printf("save %s %s\n", type, 22);
         if(type.equals(int.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveInt(element.getSimpleName().toString(), annotation.name()));
-            if(!annotation.getter().isEmpty()) {
-                builder.addMethod(PrefMethods.getInt(annotation.getter(), annotation.name()));
+            builder.addMethod(PrefMethods.saveInt("save" + capVarName, prefKey));
+            if (annotation.autoGenGet()) {
+                builder.addMethod(PrefMethods.getInt("get" + capVarName, prefKey));
             }
         } else if(type.equals(String.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveString(element.getSimpleName().toString(), annotation.name()));
-            if(!annotation.getter().isEmpty()) {
-                builder.addMethod(PrefMethods.getString(annotation.getter(), annotation.name()));
+            builder.addMethod(PrefMethods.saveString("save" + capVarName, prefKey));
+            if (annotation.autoGenGet()) {
+                builder.addMethod(PrefMethods.getString("get" + capVarName, prefKey));
             }
         } else if(type.equals(float.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveFloat(element.getSimpleName().toString(), annotation.name()));
-            if(!annotation.getter().isEmpty()) {
-                builder.addMethod(PrefMethods.getFloat(annotation.getter(), annotation.name()));
+            builder.addMethod(PrefMethods.saveFloat("save" + capVarName, prefKey));
+            if (annotation.autoGenGet()) {
+                builder.addMethod(PrefMethods.getFloat("get" + capVarName, prefKey));
             }
         } else if(type.equals(boolean.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveBoolean(element.getSimpleName().toString(), annotation.name()));
-            if(!annotation.getter().isEmpty()) {
-                builder.addMethod(PrefMethods.getBoolean(annotation.getter(), annotation.name()));
+            builder.addMethod(PrefMethods.saveBoolean("set" + capVarName, prefKey));
+            if (annotation.autoGenGet()) {
+                builder.addMethod(PrefMethods.getBoolean(varName, prefKey));
             }
         } else if(type.equals(long.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveLong(element.getSimpleName().toString(), annotation.name()));
-            if(!annotation.getter().isEmpty()) {
-                builder.addMethod(PrefMethods.getLong(annotation.getter(), annotation.name()));
+            builder.addMethod(PrefMethods.saveLong("save" + capVarName, prefKey));
+            if (annotation.autoGenGet()) {
+                builder.addMethod(PrefMethods.getLong("get" + capVarName, prefKey));
             }
-        } else if(type.contains(Set.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveStringSet(element.getSimpleName().toString(), annotation.name()));
-            if(!annotation.getter().isEmpty()) {
-                builder.addMethod(PrefMethods.getStringSet(annotation.getter(), annotation.name()));
+        } else if (type.equals(ParameterizedTypeName.get(Set.class, String.class).toString())) {
+            builder.addMethod(PrefMethods.saveStringSet("save" + capVarName, prefKey));
+            if (annotation.autoGenGet()) {
+                builder.addMethod(PrefMethods.getStringSet("get" + capVarName, prefKey));
+            }
+        } else {
+            try {
+                annotation.converter();
+            } catch (MirroredTypeException e) {
+                e.printStackTrace();
+                TypeMirror typeMirror = e.getTypeMirror();
+                TypeElement typeElement = (TypeElement) typeUtils.asElement(typeMirror);
+                if (typeElement.getSimpleName().toString().equals(TypeConverter.class.getSimpleName())) {
+                    writeError(element, "No converter provided for unsupported type. You must provide it human! hint:'@Pref(converter=Class<? extends TypeConverter>)'");
+                    return null;
+                }
+                for (Element enclosedElement : typeElement.getEnclosedElements()) {
+                    System.out.printf("enclosed %s %s\n", enclosedElement, enclosedElement.getKind());
+                    if (enclosedElement.getKind() == ElementKind.METHOD) {
+                        System.out.printf("method %s\n", enclosedElement);
+                        ExecutableElement executableElement = (ExecutableElement) enclosedElement;
+                        if (executableElement.getSimpleName().toString().equals("toSupportedType")) {
+                            builder.addMethod(PrefMethods.saveObject(
+                                    "save" + capVarName,
+                                    prefKey,
+                                    typeElement,
+                                    (TypeElement) typeUtils.asElement(executableElement.getReturnType()),
+                                    element.asType().toString()));
+                        } else if (executableElement.getSimpleName().toString().equals("getVal") && annotation.autoGenGet()) {
+                            builder.addMethod(PrefMethods.getObject(
+                                    "get" + capVarName,
+                                    prefKey,
+                                    typeElement,
+                                    executableElement.getParameters().get(0).asType().toString(),
+                                    element.asType().toString()));
+                        }
+                    }
+                }
             }
         }
         return builder;
