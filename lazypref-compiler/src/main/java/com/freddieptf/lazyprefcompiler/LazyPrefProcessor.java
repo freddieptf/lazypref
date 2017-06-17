@@ -152,76 +152,93 @@ public class LazyPrefProcessor extends AbstractProcessor {
     }
 
     private LazyBaby.Builder generateRequiredPrefMethods(Element element, LazyBaby.Builder builder, Pref annotation) {
+        if (!addMethodToLazyBabyBuilder(element, builder, annotation))
+            return null;
+        return builder;
+    }
+
+    private boolean addMethodToLazyBabyBuilder(Element element, LazyBaby.Builder builder, Pref annotation) {
         String type = element.asType().toString();
         String varName = element.getSimpleName().toString();
         String capVarName = varName.substring(0, 1).toUpperCase() + varName.substring(1);
         String prefKey = annotation.key().isEmpty() ? varName : annotation.key();
 
+        if (element.asType().getKind().isPrimitive() || type.equals(String.class.getCanonicalName())
+                || type.equals(ParameterizedTypeName.get(Set.class, String.class).toString())) {
+            processSupportedType(builder, annotation, type, varName, capVarName, prefKey);
+        } else {
+            if (!processUnsupportedType(element, builder, annotation, capVarName, prefKey))
+                return false;
+        }
+        return true;
+    }
+
+    private void processSupportedType(LazyBaby.Builder builder, Pref annotation, String type, String simpleVarName, String capitalizedVarName, String prefKey) {
         if(type.equals(int.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveInt("save" + capVarName, prefKey));
+            builder.addMethod(PrefMethods.saveInt("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getInt("get" + capVarName, prefKey));
+                builder.addMethod(PrefMethods.getInt("get" + capitalizedVarName, prefKey));
             }
         } else if(type.equals(String.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveString("save" + capVarName, prefKey));
+            builder.addMethod(PrefMethods.saveString("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getString("get" + capVarName, prefKey));
+                builder.addMethod(PrefMethods.getString("get" + capitalizedVarName, prefKey));
             }
         } else if(type.equals(float.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveFloat("save" + capVarName, prefKey));
+            builder.addMethod(PrefMethods.saveFloat("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getFloat("get" + capVarName, prefKey));
+                builder.addMethod(PrefMethods.getFloat("get" + capitalizedVarName, prefKey));
             }
         } else if(type.equals(boolean.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveBoolean("set" + capVarName, prefKey));
+            builder.addMethod(PrefMethods.saveBoolean("set" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getBoolean(varName, prefKey));
+                builder.addMethod(PrefMethods.getBoolean(simpleVarName, prefKey));
             }
         } else if(type.equals(long.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveLong("save" + capVarName, prefKey));
+            builder.addMethod(PrefMethods.saveLong("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getLong("get" + capVarName, prefKey));
+                builder.addMethod(PrefMethods.getLong("get" + capitalizedVarName, prefKey));
             }
         } else if (type.equals(ParameterizedTypeName.get(Set.class, String.class).toString())) {
-            builder.addMethod(PrefMethods.saveStringSet("save" + capVarName, prefKey));
+            builder.addMethod(PrefMethods.saveStringSet("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getStringSet("get" + capVarName, prefKey));
+                builder.addMethod(PrefMethods.getStringSet("get" + capitalizedVarName, prefKey));
             }
-        } else {
-            try {
-                annotation.converter();
-            } catch (MirroredTypeException e) {
-                e.printStackTrace();
-                TypeMirror typeMirror = e.getTypeMirror();
-                TypeElement typeElement = (TypeElement) typeUtils.asElement(typeMirror);
-                if (typeElement.getSimpleName().toString().equals(TypeConverter.class.getSimpleName())) {
-                    writeError(element, "No converter provided for unsupported type. You must provide it human! hint:'@Pref(converter=Class<? extends TypeConverter>)'");
-                    return null;
-                }
-                for (Element enclosedElement : typeElement.getEnclosedElements()) {
-                    System.out.printf("enclosed %s %s\n", enclosedElement, enclosedElement.getKind());
-                    if (enclosedElement.getKind() == ElementKind.METHOD) {
-                        System.out.printf("method %s\n", enclosedElement);
-                        ExecutableElement executableElement = (ExecutableElement) enclosedElement;
-                        if (executableElement.getSimpleName().toString().equals("toSupportedType")) {
-                            builder.addMethod(PrefMethods.saveObject(
-                                    "save" + capVarName,
-                                    prefKey,
-                                    typeElement,
-                                    (TypeElement) typeUtils.asElement(executableElement.getReturnType()),
-                                    element.asType().toString()));
-                        } else if (executableElement.getSimpleName().toString().equals("getVal") && annotation.autoGenGet()) {
-                            builder.addMethod(PrefMethods.getObject(
-                                    "get" + capVarName,
-                                    prefKey,
-                                    typeElement,
-                                    executableElement.getParameters().get(0).asType().toString(),
-                                    element.asType().toString()));
-                        }
+        }
+    }
+
+    private boolean processUnsupportedType(Element element, LazyBaby.Builder builder, Pref annotation, String capVarName, String prefKey) {
+        try {
+            annotation.converter();
+        } catch (MirroredTypeException e) {
+            e.printStackTrace();
+            TypeMirror typeMirror = e.getTypeMirror();
+            TypeElement typeElement = (TypeElement) typeUtils.asElement(typeMirror);
+            if (typeElement.getSimpleName().toString().equals(TypeConverter.class.getSimpleName())) {
+                writeError(element, "No converter provided for unsupported type. You must provide it human! hint:'@Pref(converter=Class<? extends TypeConverter>)'");
+                return false;
+            }
+            for (Element enclosedElement : typeElement.getEnclosedElements()) {
+                if (enclosedElement.getKind() == ElementKind.METHOD) {
+                    ExecutableElement executableElement = (ExecutableElement) enclosedElement;
+                    if (executableElement.getSimpleName().toString().equals("toSupportedType")) {
+                        builder.addMethod(PrefMethods.saveObject(
+                                "save" + capVarName,
+                                prefKey,
+                                typeElement,
+                                (TypeElement) typeUtils.asElement(executableElement.getReturnType()),
+                                element.asType().toString()));
+                    } else if (executableElement.getSimpleName().toString().equals("getVal") && annotation.autoGenGet()) {
+                        builder.addMethod(PrefMethods.getObject(
+                                "get" + capVarName,
+                                prefKey,
+                                typeElement,
+                                executableElement.getParameters().get(0).asType().toString(),
+                                element.asType().toString()));
                     }
                 }
             }
         }
-        return builder;
+        return true;
     }
 }

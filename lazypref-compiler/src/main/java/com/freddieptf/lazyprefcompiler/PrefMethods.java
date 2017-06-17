@@ -16,9 +16,9 @@ import javax.lang.model.element.TypeElement;
  * Created by fred on 6/3/17.
  */
 
-public class PrefMethods {
+final class PrefMethods {
 
-    public static MethodSpec getInt(String methodName, String pref_key){
+    static MethodSpec getInt(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(int.class)
@@ -26,7 +26,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec saveInt(String methodName, String pref_key){
+    static MethodSpec saveInt(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .addParameter(int.class, "value")
@@ -36,7 +36,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec getString(String methodName, String pref_key){
+    static MethodSpec getString(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(String.class)
@@ -44,7 +44,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec saveString(String methodName, String pref_key){
+    static MethodSpec saveString(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .addParameter(String.class, "value")
@@ -54,7 +54,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec getLong(String methodName, String pref_key){
+    static MethodSpec getLong(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(long.class)
@@ -62,7 +62,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec saveLong(String methodName, String pref_key){
+    static MethodSpec saveLong(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(void.class)
@@ -72,7 +72,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec getFloat(String methodName, String pref_key){
+    static MethodSpec getFloat(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(float.class)
@@ -80,7 +80,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec saveFloat(String methodName, String pref_key){
+    static MethodSpec saveFloat(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(void.class)
@@ -90,7 +90,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec getBoolean(String methodName, String pref_key){
+    static MethodSpec getBoolean(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(boolean.class)
@@ -98,7 +98,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec saveBoolean(String methodName, String pref_key){
+    static MethodSpec saveBoolean(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(void.class)
@@ -108,7 +108,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec getStringSet(String methodName, String pref_key){
+    static MethodSpec getStringSet(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(ParameterizedTypeName.get(Set.class, String.class))
@@ -116,7 +116,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec saveStringSet(String methodName, String pref_key){
+    static MethodSpec saveStringSet(String methodName, String pref_key) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .addParameter(ParameterSpec.builder(ParameterizedTypeName.get(Set.class, String.class), "set").build())
@@ -125,7 +125,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec getObject(String methodName, String pref_key, TypeElement converter, String returnType, String objectType) {
+    static MethodSpec getObject(String methodName, String pref_key, TypeElement converter, String returnType, String objectType) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(TypeVariableName.get(objectType))
@@ -134,7 +134,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec saveObject(String methodName, String pref_key, TypeElement converter, TypeElement returnType, String objectType) {
+    static MethodSpec saveObject(String methodName, String pref_key, TypeElement converter, TypeElement returnType, String objectType) {
         MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .returns(void.class)
                 .addParameter(ParameterSpec.builder(TypeVariableName.get(objectType), "val").build())
@@ -146,7 +146,7 @@ public class PrefMethods {
         return builder.build();
     }
 
-    public static MethodSpec contains(){
+    static MethodSpec contains() {
         MethodSpec.Builder builder = MethodSpec.methodBuilder("contains")
                 .addModifiers(Modifier.PUBLIC)
                 .returns(boolean.class)
