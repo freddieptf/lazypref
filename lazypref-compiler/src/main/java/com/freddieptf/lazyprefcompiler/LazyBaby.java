@@ -5,7 +5,6 @@ import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
-import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 import com.squareup.javapoet.TypeVariableName;
 
@@ -20,17 +19,15 @@ import javax.lang.model.element.Modifier;
  * Created by fred on 6/2/17.
  */
 
-public class LazyBaby {
+final class LazyBaby {
 
     static String LAZY_SUFFIX = "_lazy";
 
-    final String classPkgName;
-    final String className;
-    final TypeSpec.Builder classBuilder;
+    private final String classPkgName;
+    private final TypeSpec.Builder classBuilder;
 
-    public LazyBaby(String classPkgName, String className, TypeSpec.Builder classBuilder){
+    private LazyBaby(String classPkgName, TypeSpec.Builder classBuilder) {
         this.classPkgName = classPkgName;
-        this.className = className;
         this.classBuilder = classBuilder;
     }
 
@@ -99,7 +96,7 @@ public class LazyBaby {
 
         LazyBaby build(){
             classBuilder.addMethods(methods);
-            return new LazyBaby(packageName, className, classBuilder);
+            return new LazyBaby(packageName, classBuilder);
         }
 
     }

@@ -1,9 +1,14 @@
 package com.freddieptf.sample;
 
-import com.freddieptf.lazyprefannotations.GetPref;
 import com.freddieptf.lazyprefannotations.LazyPref;
-import com.freddieptf.lazyprefannotations.SavePref;
+import com.freddieptf.lazyprefannotations.Pref;
+import com.freddieptf.sample.converter.DateConverter;
+import com.freddieptf.sample.converter.IntArrayConverter;
+import com.freddieptf.sample.converter.UserPrefConverter;
+import com.freddieptf.sample.model.User;
 
+import java.util.Collections;
+import java.util.Date;
 import java.util.Set;
 
 /**
@@ -12,19 +17,30 @@ import java.util.Set;
 @LazyPref
 public interface SharedPrefs {
 
-    @SavePref(name = "number", getter = "getNumber")
-    void saveNumber(int number);
+    @Pref(key = "nums")
+    int number = 0;
 
-    @SavePref(name = "sets", getter = "getMySet")
-    void saveMySet(Set<String> stringSet);
+    @Pref
+    float numFloat = 0;
 
-    @SavePref(name = "string", getter = "getMyString")
-    void saveMyString(String string);
+    @Pref
+    boolean isPerson = false;
 
-    @SavePref(name = "longs", getter = "getMyLong")
-    void saveMyLong(long l);
+    @Pref
+    long time = 0;
 
-    @SavePref(name = "bools", getter = "getMyBool")
-    void saveMyBool(boolean b);
+    @Pref
+    String name = "";
 
+    @Pref
+    Set<String> stringSet = Collections.EMPTY_SET;
+
+    @Pref(converter = IntArrayConverter.class)
+    int[] ageArray = new int[]{};
+
+    @Pref(converter = UserPrefConverter.class)
+    User primaryUser = null;
+
+    @Pref(converter = DateConverter.class)
+    Date lastLogin = null;
 }
