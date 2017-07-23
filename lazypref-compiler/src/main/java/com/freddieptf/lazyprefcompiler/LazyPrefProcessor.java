@@ -4,13 +4,13 @@ import com.freddieptf.lazyprefannotations.LazyPref;
 import com.freddieptf.lazyprefannotations.Pref;
 import com.freddieptf.lazyprefannotations.TypeConverter;
 import com.google.auto.service.AutoService;
+import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.ParameterizedTypeName;
+import com.squareup.javapoet.TypeSpec;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -23,6 +23,7 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeMirror;
@@ -40,6 +41,8 @@ public class LazyPrefProcessor extends AbstractProcessor {
     private Elements elementUtils;
     private Types typeUtils;
     private Filer filer;
+    // TODO: 7/23/17 figure out how to get the app's packageName
+    private String pkgNameForHelper = "";
 
     private static String getClassName(TypeElement type, String packageName) {
         int packageLen = packageName.length() + 1;
@@ -57,8 +60,6 @@ public class LazyPrefProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
-        // map<classname, classbuilder>
-        Map<String, LazyBaby.Builder> lazyBabyMap = new HashMap<>();
 
         for(Element element : roundEnvironment.getElementsAnnotatedWith(LazyPref.class)){
             if(element.getKind() != ElementKind.INTERFACE){
@@ -69,7 +70,6 @@ public class LazyPrefProcessor extends AbstractProcessor {
             String className = getClassName((TypeElement) element, pkgName) + LazyBaby.LAZY_SUFFIX;
             LazyBaby.Builder builder = new LazyBaby.Builder(pkgName, className)
                     .buildClass();
-            lazyBabyMap.put(className, builder);
             // sanity check needed? idk..
             for(Element childElement : ((TypeElement)element).getEnclosedElements()){
                 if (childElement.getKind() == ElementKind.FIELD) {
@@ -82,41 +82,21 @@ public class LazyPrefProcessor extends AbstractProcessor {
                     }
                 }
             }
-        }
-
-        for (Element element : roundEnvironment.getElementsAnnotatedWith(Pref.class)) {
-            if (element.getKind() != ElementKind.FIELD) {
-                writeError(element, "Only variables/fields can be annotated with @%s! Found a %s", Pref.class.getSimpleName(), element.getKind());
-                return true;
-            }
-            TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
-            if(enclosingElement.getKind() != ElementKind.INTERFACE) {
-                writeError(element, "Annotated methods can only be within an interface");
-                return true;
-            }
-            String pkgName = getPackageName(enclosingElement);
-            String className = getClassName(enclosingElement, pkgName) + LazyBaby.LAZY_SUFFIX;
-            LazyBaby.Builder lazyBabyBuilder = lazyBabyMap.get(className);
-
-            if(lazyBabyBuilder == null) lazyBabyBuilder = new LazyBaby.Builder(pkgName, className).buildClass();
-            Pref annotation = element.getAnnotation(Pref.class);
-            lazyBabyBuilder = generateRequiredPrefMethods(element, lazyBabyBuilder, annotation);
-            if (lazyBabyBuilder != null) lazyBabyMap.put(className, lazyBabyBuilder);
-            else {
-                writeError(element, "Code generation failed.");
-                return true;
-            }
-        }
-
-        for(LazyBaby.Builder lazyBabyBuilder : lazyBabyMap.values()) {
+            builder = genLazyPrefClass((TypeElement) element, builder);
+            if (builder == null) return true;
             try {
-                lazyBabyBuilder.build().generateSource(filer);
-            } catch (NullPointerException | IOException e) {
-                messager.printMessage(Diagnostic.Kind.ERROR, e.getMessage());
+                builder.build().generateSource(filer);
+            } catch (IOException e) {
+                e.printStackTrace();
+                writeError(element, "Failed while trying to generate source");
                 return true;
             }
+            // this will do for now until we figure out how to get the app's package name
+            if (pkgNameForHelper.isEmpty()) {
+                pkgNameForHelper = pkgName;
+                createHelperClass(pkgNameForHelper);
+            }
         }
-
         return false;
     }
 
@@ -145,6 +125,30 @@ public class LazyPrefProcessor extends AbstractProcessor {
                 Diagnostic.Kind.WARNING,
                 String.format(message, args),
                 e);
+    }
+
+    private LazyBaby.Builder genLazyPrefClass(TypeElement typeElement, LazyBaby.Builder lazyBabyBuilder) {
+        if (typeElement.getKind() != ElementKind.INTERFACE) {
+            writeError(typeElement, "Annotated methods can only be within an interface");
+            return null;
+        }
+        String pkgName = getPackageName(typeElement);
+        String className = getClassName(typeElement, pkgName) + LazyBaby.LAZY_SUFFIX;
+        for (Element element : typeElement.getEnclosedElements()) {
+            if (element.getKind() != ElementKind.FIELD) {
+                writeError(element, "Only variables/fields can be annotated with @%s! Found a %s", Pref.class.getSimpleName(), element.getKind());
+                return null;
+            }
+            if (lazyBabyBuilder == null)
+                lazyBabyBuilder = new LazyBaby.Builder(pkgName, className).buildClass();
+            Pref annotation = element.getAnnotation(Pref.class);
+            lazyBabyBuilder = generateRequiredPrefMethods(element, lazyBabyBuilder, annotation);
+            if (lazyBabyBuilder == null) {
+                writeError(element, "Code generation failed.");
+                return null;
+            }
+        }
+        return lazyBabyBuilder;
     }
 
     private String getPackageName(TypeElement type) {
@@ -240,5 +244,19 @@ public class LazyPrefProcessor extends AbstractProcessor {
             }
         }
         return true;
+    }
+
+    boolean createHelperClass(String packageName) {
+        TypeSpec.Builder classBuilder = TypeSpec.classBuilder("LazyPreferenceHelper")
+                .addModifiers(Modifier.FINAL, Modifier.PUBLIC)
+                .addMethods(PrefMethods.getHelperMethods());
+        JavaFile javaFile = JavaFile.builder(packageName, classBuilder.build()).build();
+        try {
+            javaFile.writeTo(filer);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 }
