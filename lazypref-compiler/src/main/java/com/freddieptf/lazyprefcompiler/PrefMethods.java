@@ -6,6 +6,8 @@ import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeVariableName;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import javax.lang.model.element.Modifier;
@@ -154,6 +156,157 @@ final class PrefMethods {
                 .addStatement("return prefs.contains($N)", "pref_key");
         return builder.build();
     }
+
+    static MethodSpec helperGetInt() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("getInt")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(int.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(int.class, "defaultValue")
+                .addStatement("return $N.getInt($N, $N)", "sharedPreferences", "preferenceKey", "defaultValue");
+        return builder.build();
+    }
+
+    static MethodSpec helperSaveInt() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("saveInt")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(void.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(int.class, "value")
+                .addStatement("$N.edit().putInt($N, $N).apply();", "sharedPreferences", "preferenceKey", "value");
+
+        return builder.build();
+    }
+
+    static MethodSpec helperGetString() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("getString")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(String.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(String.class, "defaultValue")
+                .addStatement("return $N.getString($N, $N)", "sharedPreferences", "preferenceKey", "defaultValue");
+        return builder.build();
+    }
+
+    static MethodSpec helperSaveString() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("saveString")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(void.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(String.class, "value")
+                .addStatement("$N.edit().putString($N, $N).apply();", "sharedPreferences", "preferenceKey", "value");
+        return builder.build();
+    }
+
+    static MethodSpec helperGetFloat() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("getFloat")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(Float.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(Float.class, "defaultValue")
+                .addStatement("return $N.getFloat($N, $N)", "sharedPreferences", "preferenceKey", "defaultValue");
+        return builder.build();
+    }
+
+    static MethodSpec helperSaveFloat() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("saveFloat")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(void.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(Float.class, "value")
+                .addStatement("$N.edit().putFloat($N, $N).apply();", "sharedPreferences", "preferenceKey", "value");
+        return builder.build();
+    }
+
+    static MethodSpec helperGetLong() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("getLong")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(Long.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(Long.class, "defaultValue")
+                .addStatement("return $N.getLong($N, $N)", "sharedPreferences", "preferenceKey", "defaultValue");
+        return builder.build();
+    }
+
+    static MethodSpec helperSaveLong() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("saveLong")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(void.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(Long.class, "value")
+                .addStatement("$N.edit().putLong($N, $N).apply();", "sharedPreferences", "preferenceKey", "value");
+        return builder.build();
+    }
+
+    static MethodSpec helperGetBool() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("getBoolean")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(Boolean.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(Boolean.class, "defaultValue")
+                .addStatement("return $N.getBoolean($N, $N)", "sharedPreferences", "preferenceKey", "defaultValue");
+        return builder.build();
+    }
+
+    static MethodSpec helperSaveBool() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("saveBoolean")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(void.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(Boolean.class, "value")
+                .addStatement("$N.edit().putBoolean($N, $N).apply();", "sharedPreferences", "preferenceKey", "value");
+        return builder.build();
+    }
+
+    static MethodSpec helperGetStringSet() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("getStringSet")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(ParameterizedTypeName.get(Set.class, String.class))
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(ParameterSpec.builder(ParameterizedTypeName.get(Set.class, String.class), "defaultValue").build())
+                .addStatement("return $N.getStringSet($N, $N)", "sharedPreferences", "preferenceKey", "defaultValue");
+        return builder.build();
+    }
+
+    static MethodSpec helperSaveStringSet() {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder("saveBoolean")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(void.class)
+                .addParameter(ParameterSpec.builder(TypeVariableName.get("android.content.SharedPreferences"), "sharedPreferences").build())
+                .addParameter(String.class, "preferenceKey")
+                .addParameter(ParameterSpec.builder(ParameterizedTypeName.get(Set.class, String.class), "value").build())
+                .addStatement("$N.edit().putStringSet($N, $N).apply();", "sharedPreferences", "preferenceKey", "value");
+        return builder.build();
+    }
+
+    static List<MethodSpec> getHelperMethods() {
+        List<MethodSpec> methodSpecs = new ArrayList<>();
+        methodSpecs.add(helperGetInt());
+        methodSpecs.add(helperGetString());
+        methodSpecs.add(helperGetLong());
+        methodSpecs.add(helperGetFloat());
+        methodSpecs.add(helperGetStringSet());
+        methodSpecs.add(helperGetBool());
+        methodSpecs.add(helperSaveInt());
+        methodSpecs.add(helperSaveString());
+        methodSpecs.add(helperSaveLong());
+        methodSpecs.add(helperSaveFloat());
+        methodSpecs.add(helperSaveStringSet());
+        methodSpecs.add(helperSaveBool());
+        return methodSpecs;
+    }
+
 
     private static String genEditorPut(String type) {
         if (type.equals(String.class.getCanonicalName())) {
