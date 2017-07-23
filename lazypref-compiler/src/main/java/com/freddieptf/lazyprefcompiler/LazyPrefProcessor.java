@@ -132,15 +132,11 @@ public class LazyPrefProcessor extends AbstractProcessor {
             writeError(typeElement, "Annotated methods can only be within an interface");
             return null;
         }
-        String pkgName = getPackageName(typeElement);
-        String className = getClassName(typeElement, pkgName) + LazyBaby.LAZY_SUFFIX;
         for (Element element : typeElement.getEnclosedElements()) {
             if (element.getKind() != ElementKind.FIELD) {
                 writeError(element, "Only variables/fields can be annotated with @%s! Found a %s", Pref.class.getSimpleName(), element.getKind());
                 return null;
             }
-            if (lazyBabyBuilder == null)
-                lazyBabyBuilder = new LazyBaby.Builder(pkgName, className).buildClass();
             Pref annotation = element.getAnnotation(Pref.class);
             lazyBabyBuilder = generateRequiredPrefMethods(element, lazyBabyBuilder, annotation);
             if (lazyBabyBuilder == null) {
@@ -246,7 +242,7 @@ public class LazyPrefProcessor extends AbstractProcessor {
         return true;
     }
 
-    boolean createHelperClass(String packageName) {
+    private boolean createHelperClass(String packageName) {
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder("LazyPreferenceHelper")
                 .addModifiers(Modifier.FINAL, Modifier.PUBLIC)
                 .addMethods(PrefMethods.getHelperMethods());
