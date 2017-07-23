@@ -7,10 +7,8 @@ import com.google.auto.service.AutoService;
 import com.squareup.javapoet.ParameterizedTypeName;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -57,8 +55,6 @@ public class LazyPrefProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
-        // map<classname, classbuilder>
-        Map<String, LazyBaby.Builder> lazyBabyMap = new HashMap<>();
 
         for(Element element : roundEnvironment.getElementsAnnotatedWith(LazyPref.class)){
             if(element.getKind() != ElementKind.INTERFACE){
@@ -69,7 +65,6 @@ public class LazyPrefProcessor extends AbstractProcessor {
             String className = getClassName((TypeElement) element, pkgName) + LazyBaby.LAZY_SUFFIX;
             LazyBaby.Builder builder = new LazyBaby.Builder(pkgName, className)
                     .buildClass();
-            lazyBabyMap.put(className, builder);
             // sanity check needed? idk..
             for(Element childElement : ((TypeElement)element).getEnclosedElements()){
                 if (childElement.getKind() == ElementKind.FIELD) {
@@ -82,41 +77,16 @@ public class LazyPrefProcessor extends AbstractProcessor {
                     }
                 }
             }
-        }
-
-        for (Element element : roundEnvironment.getElementsAnnotatedWith(Pref.class)) {
-            if (element.getKind() != ElementKind.FIELD) {
-                writeError(element, "Only variables/fields can be annotated with @%s! Found a %s", Pref.class.getSimpleName(), element.getKind());
-                return true;
-            }
-            TypeElement enclosingElement = (TypeElement) element.getEnclosingElement();
-            if(enclosingElement.getKind() != ElementKind.INTERFACE) {
-                writeError(element, "Annotated methods can only be within an interface");
-                return true;
-            }
-            String pkgName = getPackageName(enclosingElement);
-            String className = getClassName(enclosingElement, pkgName) + LazyBaby.LAZY_SUFFIX;
-            LazyBaby.Builder lazyBabyBuilder = lazyBabyMap.get(className);
-
-            if(lazyBabyBuilder == null) lazyBabyBuilder = new LazyBaby.Builder(pkgName, className).buildClass();
-            Pref annotation = element.getAnnotation(Pref.class);
-            lazyBabyBuilder = generateRequiredPrefMethods(element, lazyBabyBuilder, annotation);
-            if (lazyBabyBuilder != null) lazyBabyMap.put(className, lazyBabyBuilder);
-            else {
-                writeError(element, "Code generation failed.");
-                return true;
-            }
-        }
-
-        for(LazyBaby.Builder lazyBabyBuilder : lazyBabyMap.values()) {
+            builder = genLazyPrefClass((TypeElement) element, builder);
+            if (builder == null) return true;
             try {
-                lazyBabyBuilder.build().generateSource(filer);
-            } catch (NullPointerException | IOException e) {
-                messager.printMessage(Diagnostic.Kind.ERROR, e.getMessage());
+                builder.build().generateSource(filer);
+            } catch (IOException e) {
+                e.printStackTrace();
+                writeError(element, "Failed while trying to generate source");
                 return true;
             }
         }
-
         return false;
     }
 
@@ -145,6 +115,30 @@ public class LazyPrefProcessor extends AbstractProcessor {
                 Diagnostic.Kind.WARNING,
                 String.format(message, args),
                 e);
+    }
+
+    private LazyBaby.Builder genLazyPrefClass(TypeElement typeElement, LazyBaby.Builder lazyBabyBuilder) {
+        if (typeElement.getKind() != ElementKind.INTERFACE) {
+            writeError(typeElement, "Annotated methods can only be within an interface");
+            return null;
+        }
+        String pkgName = getPackageName(typeElement);
+        String className = getClassName(typeElement, pkgName) + LazyBaby.LAZY_SUFFIX;
+        for (Element element : typeElement.getEnclosedElements()) {
+            if (element.getKind() != ElementKind.FIELD) {
+                writeError(element, "Only variables/fields can be annotated with @%s! Found a %s", Pref.class.getSimpleName(), element.getKind());
+                return null;
+            }
+            if (lazyBabyBuilder == null)
+                lazyBabyBuilder = new LazyBaby.Builder(pkgName, className).buildClass();
+            Pref annotation = element.getAnnotation(Pref.class);
+            lazyBabyBuilder = generateRequiredPrefMethods(element, lazyBabyBuilder, annotation);
+            if (lazyBabyBuilder == null) {
+                writeError(element, "Code generation failed.");
+                return null;
+            }
+        }
+        return lazyBabyBuilder;
     }
 
     private String getPackageName(TypeElement type) {
