@@ -106,6 +106,23 @@ A helper class **LazyPreferenceHelper** with static getter and setter methods is
 ...
 ```
 
+### Including it to your app via gradle
+
+```
+allprojects {
+	repositories {
+		jcenter()
+	}
+}
+```
+
+```
+dependencies {
+    compile 'com.freddieptf:lazypref-annotations:0.1.1'    
+    annotationProcessor 'com.freddieptf:lazypref-compiler:0.1.1'
+}
+```
+
 
 ### License
 The MIT License (MIT)
