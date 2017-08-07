@@ -5,10 +5,12 @@ import com.freddieptf.lazyprefannotations.Pref;
 import com.freddieptf.lazyprefannotations.TypeConverter;
 import com.google.auto.service.AutoService;
 import com.squareup.javapoet.JavaFile;
+import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeSpec;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -61,8 +63,8 @@ public class LazyPrefProcessor extends AbstractProcessor {
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
 
-        for(Element element : roundEnvironment.getElementsAnnotatedWith(LazyPref.class)){
-            if(element.getKind() != ElementKind.INTERFACE){
+        for (Element element : roundEnvironment.getElementsAnnotatedWith(LazyPref.class)) {
+            if (element.getKind() != ElementKind.INTERFACE) {
                 writeError(element, "Only Interfaces can be annotated with @%s", LazyPref.class.getSimpleName());
                 return true;
             }
@@ -71,10 +73,10 @@ public class LazyPrefProcessor extends AbstractProcessor {
             LazyBaby.Builder builder = new LazyBaby.Builder(pkgName, className)
                     .buildClass();
             // sanity check needed? idk..
-            for(Element childElement : ((TypeElement)element).getEnclosedElements()){
+            for (Element childElement : ((TypeElement) element).getEnclosedElements()) {
                 if (childElement.getKind() == ElementKind.FIELD) {
                     List annotations = elementUtils.getAllAnnotationMirrors(childElement);
-                    if(annotations.size() <= 0){
+                    if (annotations.size() <= 0) {
                         writeWarning(childElement, "Some fields with no annotations were found. Did you forget to annotate them?");
                     } else if (annotations.size() > 1) {
                         writeError(childElement, "You can't have more than one annotation on a field");
@@ -82,7 +84,7 @@ public class LazyPrefProcessor extends AbstractProcessor {
                     }
                 }
             }
-            builder = genLazyPrefClass((TypeElement) element, builder);
+            builder = addMethodSpecsToBuilder((TypeElement) element, builder);
             if (builder == null) return true;
             try {
                 builder.build().generateSource(filer);
@@ -102,7 +104,7 @@ public class LazyPrefProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return new HashSet<String>(){{
+        return new HashSet<String>() {{
             add(Pref.class.getCanonicalName());
             add(LazyPref.class.getCanonicalName());
         }};
@@ -113,21 +115,21 @@ public class LazyPrefProcessor extends AbstractProcessor {
         return SourceVersion.latestSupported();
     }
 
-    private void writeError(Element e, String message, Object ...args){
+    private void writeError(Element e, String message, Object... args) {
         messager.printMessage(
                 Diagnostic.Kind.ERROR,
                 String.format(message, args),
                 e);
     }
 
-    private void writeWarning(Element e, String message, Object ...args){
+    private void writeWarning(Element e, String message, Object... args) {
         messager.printMessage(
                 Diagnostic.Kind.WARNING,
                 String.format(message, args),
                 e);
     }
 
-    private LazyBaby.Builder genLazyPrefClass(TypeElement typeElement, LazyBaby.Builder lazyBabyBuilder) {
+    private LazyBaby.Builder addMethodSpecsToBuilder(TypeElement typeElement, LazyBaby.Builder lazyBabyBuilder) {
         if (typeElement.getKind() != ElementKind.INTERFACE) {
             writeError(typeElement, "Annotated methods can only be within an interface");
             return null;
@@ -138,11 +140,12 @@ public class LazyPrefProcessor extends AbstractProcessor {
                 return null;
             }
             Pref annotation = element.getAnnotation(Pref.class);
-            lazyBabyBuilder = generateRequiredPrefMethods(element, lazyBabyBuilder, annotation);
-            if (lazyBabyBuilder == null) {
+            List<MethodSpec> methodSpecs = generateRequiredPrefMethods(element, annotation);
+            if (methodSpecs.isEmpty()) {
                 writeError(element, "Code generation failed.");
                 return null;
             }
+            lazyBabyBuilder.addMethods(methodSpecs);
         }
         return lazyBabyBuilder;
     }
@@ -151,63 +154,62 @@ public class LazyPrefProcessor extends AbstractProcessor {
         return elementUtils.getPackageOf(type).getQualifiedName().toString();
     }
 
-    private LazyBaby.Builder generateRequiredPrefMethods(Element element, LazyBaby.Builder builder, Pref annotation) {
-        if (!addMethodToLazyBabyBuilder(element, builder, annotation))
-            return null;
-        return builder;
-    }
-
-    private boolean addMethodToLazyBabyBuilder(Element element, LazyBaby.Builder builder, Pref annotation) {
+    private List<MethodSpec> generateRequiredPrefMethods(Element element, Pref annotation) {
         String type = element.asType().toString();
         String varName = element.getSimpleName().toString();
         String capVarName = varName.substring(0, 1).toUpperCase() + varName.substring(1);
         String prefKey = annotation.key().isEmpty() ? varName : annotation.key();
+        List<MethodSpec> methodSpecs = new ArrayList<>();
 
         if (element.asType().getKind().isPrimitive() || type.equals(String.class.getCanonicalName())
                 || type.equals(ParameterizedTypeName.get(Set.class, String.class).toString())) {
-            processSupportedType(builder, annotation, type, varName, capVarName, prefKey);
+            methodSpecs = processSupportedType(annotation, type, varName, capVarName, prefKey);
         } else {
-            if (!processUnsupportedType(element, builder, annotation, capVarName, prefKey))
-                return false;
+            methodSpecs = processUnsupportedType(element, annotation, capVarName, prefKey);
         }
-        return true;
+
+        return methodSpecs;
     }
 
-    private void processSupportedType(LazyBaby.Builder builder, Pref annotation, String type, String simpleVarName, String capitalizedVarName, String prefKey) {
-        if(type.equals(int.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveInt("save" + capitalizedVarName, prefKey));
+
+    private List<MethodSpec> processSupportedType(Pref annotation, String type, String simpleVarName, String capitalizedVarName, String prefKey) {
+        List<MethodSpec> methodSpecs = new ArrayList<>();
+        if (type.equals(int.class.getCanonicalName())) {
+            methodSpecs.add(PrefMethods.saveInt("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getInt("get" + capitalizedVarName, prefKey));
+                methodSpecs.add(PrefMethods.getInt("get" + capitalizedVarName, prefKey));
             }
-        } else if(type.equals(String.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveString("save" + capitalizedVarName, prefKey));
+        } else if (type.equals(String.class.getCanonicalName())) {
+            methodSpecs.add(PrefMethods.saveString("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getString("get" + capitalizedVarName, prefKey));
+                methodSpecs.add(PrefMethods.getString("get" + capitalizedVarName, prefKey));
             }
-        } else if(type.equals(float.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveFloat("save" + capitalizedVarName, prefKey));
+        } else if (type.equals(float.class.getCanonicalName())) {
+            methodSpecs.add(PrefMethods.saveFloat("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getFloat("get" + capitalizedVarName, prefKey));
+                methodSpecs.add(PrefMethods.getFloat("get" + capitalizedVarName, prefKey));
             }
-        } else if(type.equals(boolean.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveBoolean("set" + capitalizedVarName, prefKey));
+        } else if (type.equals(boolean.class.getCanonicalName())) {
+            methodSpecs.add(PrefMethods.saveBoolean("set" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getBoolean(simpleVarName, prefKey));
+                methodSpecs.add(PrefMethods.getBoolean(simpleVarName, prefKey));
             }
-        } else if(type.equals(long.class.getCanonicalName())){
-            builder.addMethod(PrefMethods.saveLong("save" + capitalizedVarName, prefKey));
+        } else if (type.equals(long.class.getCanonicalName())) {
+            methodSpecs.add(PrefMethods.saveLong("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getLong("get" + capitalizedVarName, prefKey));
+                methodSpecs.add(PrefMethods.getLong("get" + capitalizedVarName, prefKey));
             }
         } else if (type.equals(ParameterizedTypeName.get(Set.class, String.class).toString())) {
-            builder.addMethod(PrefMethods.saveStringSet("save" + capitalizedVarName, prefKey));
+            methodSpecs.add(PrefMethods.saveStringSet("save" + capitalizedVarName, prefKey));
             if (annotation.autoGenGet()) {
-                builder.addMethod(PrefMethods.getStringSet("get" + capitalizedVarName, prefKey));
+                methodSpecs.add(PrefMethods.getStringSet("get" + capitalizedVarName, prefKey));
             }
         }
+        return methodSpecs;
     }
 
-    private boolean processUnsupportedType(Element element, LazyBaby.Builder builder, Pref annotation, String capVarName, String prefKey) {
+    private List<MethodSpec> processUnsupportedType(Element element, Pref annotation, String capVarName, String prefKey) {
+        List<MethodSpec> methodSpecs = new ArrayList<>();
         try {
             annotation.converter();
         } catch (MirroredTypeException e) {
@@ -216,20 +218,20 @@ public class LazyPrefProcessor extends AbstractProcessor {
             TypeElement typeElement = (TypeElement) typeUtils.asElement(typeMirror);
             if (typeElement.getSimpleName().toString().equals(TypeConverter.class.getSimpleName())) {
                 writeError(element, "No converter provided for unsupported type. You must provide it human! hint:'@Pref(converter=Class<? extends TypeConverter>)'");
-                return false;
+                return new ArrayList<>();
             }
             for (Element enclosedElement : typeElement.getEnclosedElements()) {
                 if (enclosedElement.getKind() == ElementKind.METHOD) {
                     ExecutableElement executableElement = (ExecutableElement) enclosedElement;
                     if (executableElement.getSimpleName().toString().equals("toSupportedType")) {
-                        builder.addMethod(PrefMethods.saveObject(
+                        methodSpecs.add(PrefMethods.saveObject(
                                 "save" + capVarName,
                                 prefKey,
                                 typeElement,
                                 (TypeElement) typeUtils.asElement(executableElement.getReturnType()),
                                 element.asType().toString()));
                     } else if (executableElement.getSimpleName().toString().equals("getVal") && annotation.autoGenGet()) {
-                        builder.addMethod(PrefMethods.getObject(
+                        methodSpecs.add(PrefMethods.getObject(
                                 "get" + capVarName,
                                 prefKey,
                                 typeElement,
@@ -239,7 +241,7 @@ public class LazyPrefProcessor extends AbstractProcessor {
                 }
             }
         }
-        return true;
+        return methodSpecs;
     }
 
     private boolean createHelperClass(String packageName) {

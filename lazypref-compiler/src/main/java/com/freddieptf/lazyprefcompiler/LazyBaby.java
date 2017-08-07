@@ -89,8 +89,13 @@ final class LazyBaby {
             return this;
         }
 
-        Builder addMethod(MethodSpec builder){
-            methods.add(builder);
+        Builder addMethod(MethodSpec methodSpec) {
+            methods.add(methodSpec);
+            return this;
+        }
+
+        Builder addMethods(List<MethodSpec> methodSpecs) {
+            methods.addAll(methodSpecs);
             return this;
         }
 
