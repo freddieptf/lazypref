@@ -46,7 +46,7 @@ public class LazyPrefProcessor extends AbstractProcessor {
     // TODO: 7/23/17 figure out how to get the app's packageName
     private String pkgNameForHelper = "";
 
-    private static String getClassName(TypeElement type, String packageName) {
+    private static String getKlasName(TypeElement type, String packageName) {
         int packageLen = packageName.length() + 1;
         return type.getQualifiedName().toString().substring(packageLen).replace('.', '$');
     }
@@ -62,43 +62,16 @@ public class LazyPrefProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {
-
-        for (Element element : roundEnvironment.getElementsAnnotatedWith(LazyPref.class)) {
-            if (element.getKind() != ElementKind.INTERFACE) {
-                writeError(element, "Only Interfaces can be annotated with @%s", LazyPref.class.getSimpleName());
-                return true;
-            }
-            String pkgName = getPackageName((TypeElement) element);
-            String className = getClassName((TypeElement) element, pkgName) + LazyBaby.LAZY_SUFFIX;
-            LazyBaby.Builder builder = new LazyBaby.Builder(pkgName, className)
-                    .buildClass();
-            // sanity check needed? idk..
-            for (Element childElement : ((TypeElement) element).getEnclosedElements()) {
-                if (childElement.getKind() == ElementKind.FIELD) {
-                    List annotations = elementUtils.getAllAnnotationMirrors(childElement);
-                    if (annotations.size() <= 0) {
-                        writeWarning(childElement, "Some fields with no annotations were found. Did you forget to annotate them?");
-                    } else if (annotations.size() > 1) {
-                        writeError(childElement, "You can't have more than one annotation on a field");
-                        return true;
-                    }
-                }
-            }
-            builder = addMethodSpecsToBuilder((TypeElement) element, builder);
-            if (builder == null) return true;
-            try {
-                builder.build().generateSource(filer);
-            } catch (IOException e) {
-                e.printStackTrace();
-                writeError(element, "Failed while trying to generate source");
-                return true;
-            }
-            // this will do for now until we figure out how to get the app's package name
-            if (pkgNameForHelper.isEmpty()) {
-                pkgNameForHelper = pkgName;
-                createHelperClass(pkgNameForHelper);
-            }
-        }
+        roundEnvironment.getElementsAnnotatedWith(LazyPref.class)
+                .stream()
+                .map(TypeElement.class::cast)
+                .filter(e -> {
+                    boolean b = e.getKind() == ElementKind.INTERFACE;
+                    if (!b)
+                        writeError(e, "Only Interfaces can be annotated with @%s", LazyPref.class.getSimpleName());
+                    return b;
+                })
+                .forEach(this::processLazyPrefInterface);
         return false;
     }
 
@@ -129,29 +102,64 @@ public class LazyPrefProcessor extends AbstractProcessor {
                 e);
     }
 
-    private LazyBaby.Builder addMethodSpecsToBuilder(TypeElement typeElement, LazyBaby.Builder lazyBabyBuilder) {
-        if (typeElement.getKind() != ElementKind.INTERFACE) {
-            writeError(typeElement, "Annotated methods can only be within an interface");
-            return null;
-        }
-        for (Element element : typeElement.getEnclosedElements()) {
-            if (element.getKind() != ElementKind.FIELD) {
-                writeError(element, "Only variables/fields can be annotated with @%s! Found a %s", Pref.class.getSimpleName(), element.getKind());
-                return null;
+    private String getPkgName(TypeElement type) {
+        return elementUtils.getPackageOf(type).getQualifiedName().toString();
+    }
+
+    private boolean sanityFilter(Element childElement) {
+        if (childElement.getKind() == ElementKind.FIELD) {
+            List annotations = elementUtils.getAllAnnotationMirrors(childElement);
+            if (annotations.size() <= 0) {
+                writeWarning(childElement, "Some fields with no annotations were found. Did you forget to annotate them?");
+            } else if (annotations.size() > 1) {
+                writeError(childElement, "You can't have more than one annotation on a field");
+                return true;
             }
+        } else {
+            writeError(childElement, "Only variables/fields can be annotated with @%s! Found a %s", Pref.class.getSimpleName(), childElement.getKind());
+            return true;
+        }
+        return false;
+    }
+
+    private boolean processLazyPrefInterface(TypeElement element) {
+        String pkgName = getPkgName(element);
+        String className = getKlasName(element, pkgName) + LazyBaby.LAZY_SUFFIX;
+        LazyBaby.Builder builder = new LazyBaby.Builder(pkgName, className)
+                .buildClass();
+        // sanity check needed? idk..
+        element.getEnclosedElements()
+                .parallelStream()
+                .forEach(this::sanityFilter);
+
+        builder = addMethodSpecsToBuilder(element, builder);
+        if (builder == null) return true;
+        try {
+            builder.build().generateSource(filer);
+        } catch (IOException e) {
+            e.printStackTrace();
+            writeError(element, "Failed while trying to generate source");
+            return true;
+        }
+        // this will do for now until we figure out how to get the app's package name
+        if (pkgNameForHelper.isEmpty()) {
+            pkgNameForHelper = pkgName;
+            createHelperClass(pkgNameForHelper);
+        }
+        return false;
+    }
+
+    private LazyBaby.Builder addMethodSpecsToBuilder(TypeElement typeElement, LazyBaby.Builder lazyBabyBuilder) {
+        typeElement.getEnclosedElements().forEach(element -> {
             Pref annotation = element.getAnnotation(Pref.class);
             List<MethodSpec> methodSpecs = generateRequiredPrefMethods(element, annotation);
             if (methodSpecs.isEmpty()) {
-                writeError(element, "Code generation failed.");
-                return null;
+                writeWarning(element, "Could not generate methods for this element");
+            } else {
+                lazyBabyBuilder.addMethods(methodSpecs);
             }
-            lazyBabyBuilder.addMethods(methodSpecs);
-        }
+        });
         return lazyBabyBuilder;
-    }
-
-    private String getPackageName(TypeElement type) {
-        return elementUtils.getPackageOf(type).getQualifiedName().toString();
     }
 
     private List<MethodSpec> generateRequiredPrefMethods(Element element, Pref annotation) {
@@ -220,26 +228,27 @@ public class LazyPrefProcessor extends AbstractProcessor {
                 writeError(element, "No converter provided for unsupported type. You must provide it human! hint:'@Pref(converter=Class<? extends TypeConverter>)'");
                 return new ArrayList<>();
             }
-            for (Element enclosedElement : typeElement.getEnclosedElements()) {
-                if (enclosedElement.getKind() == ElementKind.METHOD) {
-                    ExecutableElement executableElement = (ExecutableElement) enclosedElement;
-                    if (executableElement.getSimpleName().toString().equals("toSupportedType")) {
-                        methodSpecs.add(PrefMethods.saveObject(
-                                "save" + capVarName,
-                                prefKey,
-                                typeElement,
-                                (TypeElement) typeUtils.asElement(executableElement.getReturnType()),
-                                element.asType().toString()));
-                    } else if (executableElement.getSimpleName().toString().equals("getVal") && annotation.autoGenGet()) {
-                        methodSpecs.add(PrefMethods.getObject(
-                                "get" + capVarName,
-                                prefKey,
-                                typeElement,
-                                executableElement.getParameters().get(0).asType().toString(),
-                                element.asType().toString()));
-                    }
-                }
-            }
+            typeElement.getEnclosedElements()
+                    .stream()
+                    .filter(enclosedElement -> enclosedElement.getKind() == ElementKind.METHOD)
+                    .forEach(enclosedElement -> {
+                        ExecutableElement executableElement = (ExecutableElement) enclosedElement;
+                        if (executableElement.getSimpleName().toString().equals("toSupportedType")) {
+                            methodSpecs.add(PrefMethods.saveObject(
+                                    "save" + capVarName,
+                                    prefKey,
+                                    typeElement,
+                                    (TypeElement) typeUtils.asElement(executableElement.getReturnType()),
+                                    element.asType().toString()));
+                        } else if (executableElement.getSimpleName().toString().equals("getVal") && annotation.autoGenGet()) {
+                            methodSpecs.add(PrefMethods.getObject(
+                                    "get" + capVarName,
+                                    prefKey,
+                                    typeElement,
+                                    executableElement.getParameters().get(0).asType().toString(),
+                                    element.asType().toString()));
+                        }
+                    });
         }
         return methodSpecs;
     }

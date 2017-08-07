@@ -2,8 +2,8 @@ apply plugin: 'java'
 apply plugin: 'com.github.dcendents.android-maven'
 apply plugin: 'com.jfrog.bintray'
 
-sourceCompatibility = "1.7"
-targetCompatibility = "1.7"
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
 
 version = library.version
 group = library.groupId
@@ -16,6 +16,7 @@ dependencies {
     compile 'com.squareup:javapoet:1.9.0'
     compile group: 'com.google.auto.service', name: 'auto-service', version: '1.0-rc1'
 }
+
 
 if (project.hasProperty("android")) { // Android libraries
     task sourcesJar(type: Jar) {
