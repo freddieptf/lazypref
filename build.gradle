@@ -6,7 +6,8 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:2.3.1'
-
+        classpath 'com.github.dcendents:android-maven-gradle-plugin:1.4.1'
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.4'
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
@@ -20,4 +21,29 @@ allprojects {
 
 task clean(type: Delete) {
     delete rootProject.buildDir
+}
+
+ext {
+
+    library = [
+            developer  : 'freddieptf',
+            groupId    : 'com.freddieptf',
+            version    : '0.1.1-snap',
+            license    : 'The MIT License',
+            licenseUrl : 'https://opensource.org/licenses/MIT',
+            git        : 'https://github.com/freddieptf/lazypref',
+            bintrayRepo: 'android',
+            bintrayName: 'lazypref'
+    ]
+
+    annotations = [
+            artifactId : 'lazypref-annotations',
+            description: 'Annotations'
+
+    ]
+    compiler = [
+            artifactId : 'lazypref-compiler',
+            description: 'Annotations Compiler'
+    ]
+
 }

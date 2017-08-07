@@ -1,8 +1,90 @@
 apply plugin: 'java'
+apply plugin: 'com.github.dcendents.android-maven'
+apply plugin: 'com.jfrog.bintray'
+
+sourceCompatibility = "1.7"
+targetCompatibility = "1.7"
+
+version = library.version
+group = library.groupId
 
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
 }
 
-sourceCompatibility = "1.7"
-targetCompatibility = "1.7"
+if (project.hasProperty("android")) { // Android libraries
+    task sourcesJar(type: Jar) {
+        classifier = 'sources'
+        from android.sourceSets.main.java.srcDirs
+    }
+
+    task javadoc(type: Javadoc) {
+        source = android.sourceSets.main.java.srcDirs
+        classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+    }
+} else { // Java libraries
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives javadocJar
+    archives sourcesJar
+}
+
+install {
+    repositories.mavenInstaller {
+        pom.project {
+            name annotations.artifactId
+            description annotations.description
+            url library.git
+            packaging 'aar'
+            groupId library.groupId
+            artifactId annotations.artifactId
+            version library.version
+            licenses {
+                license {
+                    name library.license
+                    url library.licenseUrl
+                    distribution 'repo'
+                }
+            }
+            scm {
+                connection library.git + '.git'
+                url library.git
+
+            }
+            developers {
+                developer {
+                    name library.developer
+                }
+            }
+        }
+    }
+}
+
+bintray {
+    Properties localProperties = new Properties()
+    localProperties.load(project.rootProject.file('local.properties').newDataInputStream())
+    user = localProperties.getProperty('bintrayUser')
+    key = localProperties.getProperty('bintrayApiKey')
+    configurations = ['archives']
+    pkg {
+        repo = library.bintrayRepo
+        name = library.bintrayName
+        licenses = [library.license]
+        vcsUrl = library.git
+        version {
+            name = library.version
+            desc = annotations.description
+            vcsTag = library.version
+        }
+    }
+}
