@@ -125,7 +125,9 @@ public class LazyPrefProcessor extends AbstractProcessor {
     private boolean processLazyPrefInterface(TypeElement element) {
         String pkgName = getPkgName(element);
         String className = getKlasName(element, pkgName) + LazyBaby.LAZY_SUFFIX;
+        String preferenceName = element.getAnnotation(LazyPref.class).preferenceName();
         LazyBaby.Builder builder = new LazyBaby.Builder(pkgName, className)
+                .setPreferenceName(preferenceName)
                 .buildClass();
         // sanity check needed? idk..
         element.getEnclosedElements()
