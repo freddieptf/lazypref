@@ -11,4 +11,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.SOURCE)
 public @interface LazyPref {
+
+    String preferenceName() default ""; // Name of the preference file to be created
+
 }

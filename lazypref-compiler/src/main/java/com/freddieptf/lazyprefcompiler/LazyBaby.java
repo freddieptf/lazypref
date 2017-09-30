@@ -6,7 +6,6 @@ import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.TypeSpec;
-import com.squareup.javapoet.TypeVariableName;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,6 +38,7 @@ final class LazyBaby {
     static class Builder {
         private final String packageName;
         private final String className;
+        private String preferenceName;
         private TypeSpec.Builder classBuilder;
         private List<MethodSpec> methods = new ArrayList<>();
 
@@ -50,13 +50,13 @@ final class LazyBaby {
         Builder buildClass(){
             ClassName generatedClassName = ClassName.get(packageName, className);
             ClassName sharedPreferencesClassName = ClassName.get("android.content", "SharedPreferences");
+            ClassName contextClassName = ClassName.get("android.content", "Context");
+            ClassName preferenceManagerClassName = ClassName.get("android.preference", "PreferenceManager");
 
-            FieldSpec prefs = FieldSpec
-                    .builder(TypeVariableName.get("SharedPreferences"), "prefs", Modifier.FINAL, Modifier.PRIVATE)
+            FieldSpec prefs = FieldSpec.builder(sharedPreferencesClassName, "prefs", Modifier.FINAL, Modifier.PRIVATE)
                     .build();
 
-            FieldSpec editor = FieldSpec
-                    .builder(TypeVariableName.get("SharedPreferences.Editor"), "editor", Modifier.FINAL, Modifier.PRIVATE)
+            FieldSpec editor = FieldSpec.builder(sharedPreferencesClassName.nestedClass("Editor"), "editor", Modifier.FINAL, Modifier.PRIVATE)
                     .build();
 
             FieldSpec instance = FieldSpec.builder(generatedClassName, "INSTANCE", Modifier.PRIVATE, Modifier.STATIC)
@@ -64,28 +64,43 @@ final class LazyBaby {
 
             MethodSpec getter = MethodSpec.methodBuilder("getInstance")
                     .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                    .addParameter(ParameterSpec.builder(sharedPreferencesClassName, "prefs").build())
+                    .addParameter(ParameterSpec.builder(contextClassName, "context").build())
                     .returns(ClassName.get(packageName, className))
-                    .addStatement("if (INSTANCE == null) INSTANCE = new $T($N)", generatedClassName, "prefs")
+                    .addStatement("if (INSTANCE == null) INSTANCE = new $T($N)", generatedClassName, "context")
                     .addStatement("return INSTANCE")
                     .build();
 
-            MethodSpec constructor = MethodSpec.constructorBuilder()
-                    .addModifiers(Modifier.PRIVATE)
-                    .addParameter(sharedPreferencesClassName, "prefs", Modifier.FINAL)
-                    .addStatement("this.$N = $N", "prefs", "prefs")
-                    .addStatement("editor = this.$N.edit()", "prefs")
-                    .build();
+            MethodSpec defaultConstructor;
+
+            if (preferenceName.isEmpty())
+                defaultConstructor = MethodSpec.constructorBuilder()
+                        .addModifiers(Modifier.PRIVATE)
+                        .addParameter(contextClassName, "context", Modifier.FINAL)
+                        .addStatement("this.$N = $T.getDefaultSharedPreferences($N)", "prefs", preferenceManagerClassName, "context")
+                        .addStatement("editor = this.$N.edit()", "prefs")
+                        .build();
+            else
+                defaultConstructor = MethodSpec.constructorBuilder()
+                        .addModifiers(Modifier.PRIVATE)
+                        .addParameter(contextClassName, "context", Modifier.FINAL)
+                        .addStatement("this.$N = $N.getSharedPreferences($S, $T.MODE_PRIVATE)", "prefs", "context", preferenceName, contextClassName)
+                        .addStatement("editor = this.$N.edit()", "prefs")
+                        .build();
 
             classBuilder = TypeSpec.classBuilder(className)
                     .addModifiers(Modifier.FINAL, Modifier.PUBLIC)
                     .addField(instance)
                     .addField(prefs)
                     .addField(editor)
-                    .addMethod(constructor)
+                    .addMethod(defaultConstructor)
                     .addMethod(getter)
                     .addMethod(PrefMethods.contains());
 
+            return this;
+        }
+
+        Builder setPreferenceName(String preferenceName) {
+            this.preferenceName = preferenceName;
             return this;
         }
 
