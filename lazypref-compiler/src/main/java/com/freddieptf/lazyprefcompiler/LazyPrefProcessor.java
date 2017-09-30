@@ -4,10 +4,8 @@ import com.freddieptf.lazyprefannotations.LazyPref;
 import com.freddieptf.lazyprefannotations.Pref;
 import com.freddieptf.lazyprefannotations.TypeConverter;
 import com.google.auto.service.AutoService;
-import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
-import com.squareup.javapoet.TypeSpec;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,7 +23,6 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeMirror;
@@ -43,8 +40,6 @@ public class LazyPrefProcessor extends AbstractProcessor {
     private Elements elementUtils;
     private Types typeUtils;
     private Filer filer;
-    // TODO: 7/23/17 figure out how to get the app's packageName
-    private String pkgNameForHelper = "";
 
     private static String getKlasName(TypeElement type, String packageName) {
         int packageLen = packageName.length() + 1;
@@ -143,11 +138,7 @@ public class LazyPrefProcessor extends AbstractProcessor {
             writeError(element, "Failed while trying to generate source");
             return true;
         }
-        // this will do for now until we figure out how to get the app's package name
-        if (pkgNameForHelper.isEmpty()) {
-            pkgNameForHelper = pkgName;
-            createHelperClass(pkgNameForHelper);
-        }
+
         return false;
     }
 
@@ -255,17 +246,4 @@ public class LazyPrefProcessor extends AbstractProcessor {
         return methodSpecs;
     }
 
-    private boolean createHelperClass(String packageName) {
-        TypeSpec.Builder classBuilder = TypeSpec.classBuilder("LazyPreferenceHelper")
-                .addModifiers(Modifier.FINAL, Modifier.PUBLIC)
-                .addMethods(PrefMethods.getHelperMethods());
-        JavaFile javaFile = JavaFile.builder(packageName, classBuilder.build()).build();
-        try {
-            javaFile.writeTo(filer);
-            return true;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
 }
