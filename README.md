@@ -4,28 +4,35 @@ Code generation for your SharedPreferences util classes.
 ## Usage
 
 Create an interface and annotate it with @LazyPref annotation. Then add any fields you'd like to store in your shared preferences and annotate them with the @Pref annotation
+
 ```java
+// you can provide a preferenceName here if you don't want to
+// use the default shared prefences
+// @LazyPref(preferenceName = "me_nums_nums")
 @LazyPref
 public interface SharedPrefs {
     @Pref(key = "nums")
     int number = 0;
 }
 ```
-Recompile your project and a class will be generated in the same package with the suffix _lazy
+
+Recompile your project and a class will be generated in the same package with the suffix `_lazy`
 
 ```java
 public final class SharedPrefs_lazy {
   private static SharedPrefs_lazy INSTANCE;
+
   private final SharedPreferences prefs;
+
   private final SharedPreferences.Editor editor;
 
-  private SharedPrefs_lazy(final SharedPreferences prefs) {
-    this.prefs = prefs;
+  private SharedPrefs_lazy(final Context context) {
+    this.prefs = PreferenceManager.getDefaultSharedPreferences(context);
     editor = this.prefs.edit();
   }
 
-  public static SharedPrefs_lazy getInstance(SharedPreferences prefs) {
-    if (INSTANCE == null) INSTANCE = new SharedPrefs_lazy(prefs);
+  public static SharedPrefs_lazy getInstance(Context context) {
+    if (INSTANCE == null) INSTANCE = new SharedPrefs_lazy(context);
     return INSTANCE;
   }
 
@@ -43,7 +50,19 @@ public final class SharedPrefs_lazy {
   }
 
 }
+
 ```
+
+### The @LazyPref Annotation
+
+```java
+public @interface LazyPref {
+
+    String preferenceName() default ""; // Name of the preference file to be created
+
+}
+```
+
 ### The @Pref Annotation
 
 ```java
@@ -91,19 +110,7 @@ and finally
     ...
     @Pref(converter = UserPrefConverter.class)
     User primaryUser = null;
-    ... 
-```
-
-### Preferences Helper Class
-A helper class **LazyPreferenceHelper** with static getter and setter methods is also generated for all the types supported by SharedPreferences, in the format
-
-```java
-...
-...
-    public static int getInt(android.content.SharedPreferences sharedPreferences, String preferenceKey, int defaultValue){ ... }
-    public static void saveInt(android.content.SharedPreferences sharedPreferences, String preferenceKey, int value) { ... }
-...
-...
+    ...
 ```
 
 ### Including it to your app via gradle
@@ -118,15 +125,15 @@ allprojects {
 
 ```
 dependencies {
-    compile 'com.freddieptf:lazypref-annotations:0.1.1'    
-    annotationProcessor 'com.freddieptf:lazypref-compiler:0.1.1'
+    compile 'com.freddieptf:lazypref-annotations:0.1.2'    
+    annotationProcessor 'com.freddieptf:lazypref-compiler:0.1.2'
 }
 ```
 
 
 ### License
 The MIT License (MIT)
-
+```
 Copyright (c) 2017 Fred Muiru
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -146,4 +153,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
+```

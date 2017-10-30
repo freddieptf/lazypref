@@ -28,7 +28,7 @@ ext {
     library = [
             developer  : 'freddieptf',
             groupId    : 'com.freddieptf',
-            version    : '0.1.1-snap',
+            version    : '0.1.2',
             license    : 'The MIT License',
             licenseUrl : 'https://opensource.org/licenses/MIT',
             git        : 'https://github.com/freddieptf/lazypref',
